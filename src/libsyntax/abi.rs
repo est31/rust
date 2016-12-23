@@ -49,6 +49,7 @@ pub enum Abi {
     RustIntrinsic,
     RustCall,
     PlatformIntrinsic,
+    Unadjusted
 }
 
 #[allow(non_camel_case_types)]
@@ -90,6 +91,7 @@ const AbiDatas: &'static [AbiData] = &[
     AbiData {abi: Abi::RustIntrinsic, name: "rust-intrinsic", generic: true },
     AbiData {abi: Abi::RustCall, name: "rust-call", generic: true },
     AbiData {abi: Abi::PlatformIntrinsic, name: "platform-intrinsic", generic: true },
+    AbiData {abi: Abi::Unadjusted, name: "unadjusted", generic: true },
 ];
 
 /// Returns the ABI with the given name (if any).

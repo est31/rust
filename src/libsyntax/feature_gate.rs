@@ -321,6 +321,9 @@ declare_features! (
 
     // The `i128` type
     (active, i128_type, "1.16.0", Some(35118)),
+
+    // The `unadjusted` ABI. Perma unstable.
+    (active, abi_unadjusted, "1.16.0", None),
 );
 
 declare_features! (
@@ -988,6 +991,10 @@ impl<'a> PostExpansionVisitor<'a> {
             Abi::SysV64 => {
                 gate_feature_post!(&self, abi_sysv64, span,
                                    "sysv64 ABI is experimental and subject to change");
+            },
+            Abi::Unadjusted => {
+                gate_feature_post!(&self, abi_unadjusted, span,
+                                   "unadjusted ABI is an implementation detail and perma-unstable");
             },
             _ => {}
         }
