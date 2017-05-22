@@ -94,6 +94,8 @@
 #![feature(untagged_unions)]
 #![feature(unwind_attributes)]
 
+#![recursion_limit="128"]
+
 #[prelude_import]
 #[allow(unused)]
 use prelude::v1::*;
