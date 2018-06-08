@@ -10,10 +10,9 @@
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeSet;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, BTreeSet};
 use std::env;
-use std::fmt::Debug;
+use std::fmt::{Debug, Write};
 use std::fs;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -32,7 +31,7 @@ use native;
 use test;
 use tool;
 use util::{add_lib_path, exe, libdir};
-use {Build, DocTests, Mode};
+use {Build, DocTests, Mode, Crate};
 
 pub use Compiler;
 
@@ -881,6 +880,9 @@ impl<'a> Builder<'a> {
                 .env("RUSTC_SNAPSHOT_LIBDIR", self.rustc_libdir(compiler));
         }
 
+        cargo.env("CARGO_UNSTABLE_IMPLICIT_DEPS", self.cargo_insertion_dep_list());
+        cargo.arg("-Zimplicit-deps");
+
         // Ignore incremental modes except for stage0, since we're
         // not guaranteeing correctness across builds if the compiler
         // is changing under your feet.`
@@ -1043,6 +1045,51 @@ impl<'a> Builder<'a> {
         self.ci_env.force_coloring_in_ci(&mut cargo);
 
         cargo
+    }
+
+    fn cargo_insertion_dep_list(&self) -> String {
+        fn find_crate(b: &Build, name: Interned<String>) -> Option<&Crate> {
+            for (n, c) in b.crates.iter() {
+                if n == name {
+                    return Some(&c);
+                }
+            }
+            None
+        }
+        fn walk_deps(b: &Build, name: Interned<String>, f: &mut impl FnMut(&Crate) -> bool) {
+            let krate = find_crate(b, name);
+            let krate = krate.unwrap_or_else(|| panic!("couldn't find crate {}", name));
+            if f(krate) {
+                for d in krate.link_deps.iter() {
+                    walk_deps(b, *d, f);
+                }
+            }
+        }
+
+        let lcb = find_crate(self, INTERNER.intern_str("compiler_builtins")).unwrap();
+        let core = find_crate(self, INTERNER.intern_str("core")).unwrap();
+
+        let mut dep_list = String::new();
+        let mut crate_list = HashSet::new();
+        walk_deps(self, INTERNER.intern_str("std"), &mut |krate| {
+            // If we've already visited the crate, return false
+            if !crate_list.insert(krate.name) {
+                return false;
+            }
+            // If the crate is libcore, we don't need any deps
+            if krate.id == core.id {
+                return false;
+            }
+            writeln!(dep_list, "{}={}", krate.id, core.id).unwrap();
+            // If the crate is libcompiler_builtins, we need only core as dep
+            if krate.id == lcb.id {
+                return false;
+            }
+            // Otherwise: libcompiler_builtins and libcore as deps
+            writeln!(dep_list, "{}={}", krate.id, lcb.id).unwrap();
+            true
+        });
+        dep_list
     }
 
     /// Ensure that a given step is built, returning its output. This will

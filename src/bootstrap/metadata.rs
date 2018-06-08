@@ -32,6 +32,13 @@ struct Package {
     version: String,
     source: Option<String>,
     manifest_path: String,
+    dependencies: Vec<Dependency>,
+}
+
+#[derive(Deserialize)]
+struct Dependency {
+    name: String,
+    kind: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +99,10 @@ fn build_krate(features: &str, build: &mut Build, resolves: &mut Vec<ResolveNode
             let name = INTERNER.intern_string(package.name);
             let mut path = PathBuf::from(package.manifest_path);
             path.pop();
+            let link_deps = package.dependencies.iter()
+                .filter(|d| d.kind.is_none())
+                .map(|d| INTERNER.intern_str(&d.name))
+                .collect::<HashSet<_>>();
             build.crates.insert(name, Crate {
                 build_step: format!("build-crate-{}", name),
                 doc_step: format!("doc-crate-{}", name),
@@ -101,6 +112,7 @@ fn build_krate(features: &str, build: &mut Build, resolves: &mut Vec<ResolveNode
                 version: package.version,
                 id: package.id,
                 deps: HashSet::new(),
+                link_deps,
                 path,
             });
         }

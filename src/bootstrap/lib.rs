@@ -281,6 +281,7 @@ struct Crate {
     name: Interned<String>,
     version: String,
     deps: HashSet<Interned<String>>,
+    link_deps: HashSet<Interned<String>>,
     id: String,
     path: PathBuf,
     doc_step: String,
