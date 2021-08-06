@@ -1,6 +1,5 @@
 // run-rustfix
 
-#![feature(box_syntax)]
 #![allow(clippy::deref_addrof, dead_code, unused, clippy::no_effect)]
 #![warn(clippy::unnecessary_operation)]
 

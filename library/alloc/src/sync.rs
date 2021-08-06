@@ -342,11 +342,11 @@ impl<T> Arc<T> {
     pub fn new(data: T) -> Arc<T> {
         // Start the weak pointer count as 1 which is the weak pointer that's
         // held by all the strong pointers (kinda), see std/rc.rs for more info
-        let x: Box<_> = box ArcInner {
+        let x = Box::new(ArcInner {
             strong: atomic::AtomicUsize::new(1),
             weak: atomic::AtomicUsize::new(1),
             data,
-        };
+        });
         Self::from_inner(Box::leak(x).into())
     }
 
@@ -376,11 +376,11 @@ impl<T> Arc<T> {
     pub fn new_cyclic(data_fn: impl FnOnce(&Weak<T>) -> T) -> Arc<T> {
         // Construct the inner in the "uninitialized" state with a single
         // weak reference.
-        let uninit_ptr: NonNull<_> = Box::leak(box ArcInner {
+        let uninit_ptr: NonNull<_> = Box::leak(Box::new(ArcInner {
             strong: atomic::AtomicUsize::new(0),
             weak: atomic::AtomicUsize::new(1),
             data: mem::MaybeUninit::<T>::uninit(),
-        })
+        }))
         .into();
         let init_ptr: NonNull<ArcInner<T>> = uninit_ptr.cast();
 

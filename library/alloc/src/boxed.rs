@@ -189,7 +189,7 @@ impl<T> Box<T> {
     #[inline(always)]
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn new(x: T) -> Self {
-        box x
+        Self::new_in(x, Global)
     }
 
     /// Constructs a new box with uninitialized contents.
@@ -248,7 +248,7 @@ impl<T> Box<T> {
     #[stable(feature = "pin", since = "1.33.0")]
     #[inline(always)]
     pub fn pin(x: T) -> Pin<Box<T>> {
-        (box x).into()
+        Self::pin_in(x, Global)
     }
 
     /// Allocates memory on the heap then places `x` into it,
@@ -1026,7 +1026,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Box<T, A> {
 impl<T: Default> Default for Box<T> {
     /// Creates a `Box<T>`, with the `Default` value for T.
     fn default() -> Self {
-        box T::default()
+        Box::new(T::default())
     }
 }
 
@@ -1342,7 +1342,7 @@ impl<T, const N: usize> From<[T; N]> for Box<[T]> {
     /// println!("{:?}", boxed);
     /// ```
     fn from(array: [T; N]) -> Box<[T]> {
-        box array
+        Box::new(array)
     }
 }
 

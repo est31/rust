@@ -3,7 +3,6 @@
 #![feature(array_methods)]
 #![feature(array_windows)]
 #![feature(bool_to_option)]
-#![feature(box_syntax)]
 #![feature(cell_update)]
 #![feature(cfg_panic)]
 #![feature(cfg_target_has_atomic)]

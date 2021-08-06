@@ -2821,7 +2821,7 @@ impl<T: Clone> From<&mut [T]> for Vec<T> {
 impl<T, const N: usize> From<[T; N]> for Vec<T> {
     #[cfg(not(test))]
     fn from(s: [T; N]) -> Vec<T> {
-        <[T]>::into_vec(box s)
+        <[T]>::into_vec(Box::new(s))
     }
     /// Allocate a `Vec<T>` and move `s`'s items into it.
     ///

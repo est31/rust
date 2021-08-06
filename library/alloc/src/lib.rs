@@ -87,7 +87,6 @@
 #![feature(async_stream)]
 #![cfg_attr(bootstrap, feature(bindings_after_at))]
 #![feature(box_patterns)]
-#![feature(box_syntax)]
 #![feature(cfg_sanitize)]
 #![feature(cfg_target_has_atomic)]
 #![feature(coerce_unsized)]

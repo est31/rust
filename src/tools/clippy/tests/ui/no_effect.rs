@@ -1,4 +1,3 @@
-#![feature(box_syntax)]
 #![warn(clippy::no_effect)]
 #![allow(dead_code)]
 #![allow(path_statements)]
