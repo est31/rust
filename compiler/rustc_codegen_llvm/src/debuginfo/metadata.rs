@@ -1516,7 +1516,7 @@ fn generator_layout_and_saved_local_names(
 
     let state_arg = mir::Local::new(1);
     for var in &body.var_debug_info {
-        let place = if let mir::VarDebugInfoContents::Place(p) = var.value { p } else { continue };
+        let mir::VarDebugInfoContents::Place(place) = var.value else { continue };
         if place.local != state_arg {
             continue;
         }

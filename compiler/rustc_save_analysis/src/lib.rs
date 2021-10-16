@@ -1,5 +1,6 @@
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/nightly-rustc/")]
 #![feature(if_let_guard)]
+#![feature(let_else)]
 #![feature(nll)]
 #![recursion_limit = "256"]
 

@@ -11,6 +11,7 @@
 #![feature(extern_types)]
 #![feature(in_band_lifetimes)]
 #![feature(iter_zip)]
+#![feature(let_else)]
 #![feature(nll)]
 #![recursion_limit = "256"]
 
