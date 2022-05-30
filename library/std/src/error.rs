@@ -1581,7 +1581,7 @@ where
     E: Error + 'a,
 {
     fn from(error: E) -> Self {
-        let error = box error;
+        let error = Box::new(error);
         Report { error, show_backtrace: false, pretty: false }
     }
 }
