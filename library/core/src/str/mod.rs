@@ -76,6 +76,8 @@ use iter::MatchIndicesInternal;
 use iter::SplitInternal;
 use iter::{MatchesInternal, SplitNInternal};
 
+pub(crate) use validations::utf8_is_cont_byte;
+
 #[inline(never)]
 #[cold]
 #[track_caller]

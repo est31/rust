@@ -179,10 +179,11 @@ pub const fn const_panic_fmt(fmt: fmt::Arguments<'_>) -> ! {
     if let Some(msg) = fmt.as_str() {
         panic_str(msg);
     } else {
-        // SAFETY: This is only evaluated at compile time, which reliably
-        // handles this UB (in case this branch turns out to be reachable
-        // somehow).
-        unsafe { crate::hint::unreachable_unchecked() };
+        if let Ok(msg) = crate::fmt::write_to_leaked_str(fmt) {
+            panic_str(msg);
+        } else {
+            panic_str("internal error: error during panic message creation");
+        }
     }
 }
 

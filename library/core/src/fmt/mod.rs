@@ -19,6 +19,16 @@ mod float;
 mod nofloat;
 mod num;
 
+// FIXME: remove once question mark is supported in const fn
+macro_rules! tri {
+    ($ex:expr) => (
+        match $ex {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+    );
+}
+
 #[stable(feature = "fmt_flags_align", since = "1.28.0")]
 #[cfg_attr(not(test), rustc_diagnostic_item = "Alignment")]
 /// Possible alignments returned by `Formatter::align`
@@ -213,6 +223,76 @@ impl<W: Write + ?Sized> Write for &mut W {
     }
 }
 
+struct ConstBuf {
+    // FIXME: replace this with core::intrinsics::const_allocate'd memory
+    buf: [u8; 16_000],
+    offs: usize,
+}
+
+impl ConstBuf {
+    const fn write_str(&mut self, _data: &str) -> Result {
+        // FIXME
+        Ok(())
+    }
+    const fn write_char(&mut self, _ch: char) -> Result {
+        // FIXME
+        Ok(())
+    }
+    const fn write_fmt(&mut self, _fmt: Arguments<'_>) -> Result {
+        // FIXME
+        Ok(())
+    }
+}
+
+union Buf<'a> {
+    write: &'a mut (dyn Write + 'a),
+    const_buf: &'a mut ConstBuf,
+}
+
+
+impl<'a> Buf<'a> {
+    const fn write_str(&mut self, data: &str) -> Result {
+        const fn write_str_const(buf: &mut Buf<'_>, data: &str) -> Result {
+            unsafe {
+                (buf.const_buf).write_str(data)
+            }
+        }
+        fn write_str(buf: &mut Buf<'_>, data: &str) -> Result {
+            unsafe {
+                (buf.write).write_str(data)
+            }
+        }
+        unsafe {
+            crate::intrinsics::const_eval_select((self, data), write_str_const, write_str)
+        }
+    }
+    const fn write_char(&mut self, ch: char) -> Result {
+        const fn write_char_const(buf: &mut Buf<'_>, ch: char) -> Result {
+            unsafe {
+                buf.const_buf.write_char(ch)
+            }
+        }
+        fn write_char(buf: &mut Buf<'_>, ch: char) -> Result {
+            unsafe { buf.write.write_char(ch) }
+        }
+        unsafe {
+            crate::intrinsics::const_eval_select((self, ch), write_char_const, write_char)
+        }
+    }
+
+    const fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result {
+        const fn write_fmt_const(buf: &mut Buf<'_>, fmt: Arguments<'_>) -> Result {
+            unsafe { buf.const_buf.write_fmt(fmt) }
+        }
+        fn write_fmt(buf: &mut Buf<'_>, fmt: Arguments<'_>) -> Result {
+            unsafe { write(buf.write, fmt) }
+        }
+        unsafe {
+            crate::intrinsics::const_eval_select((self, fmt), write_fmt_const, write_fmt)
+        }
+    }
+}
+
 /// Configuration for formatting.
 ///
 /// A `Formatter` represents various options related to formatting. Users do not
@@ -231,7 +311,7 @@ pub struct Formatter<'a> {
     width: Option<usize>,
     precision: Option<usize>,
 
-    buf: &'a mut (dyn Write + 'a),
+    buf: Buf<'a>,
 }
 
 impl<'a> Formatter<'a> {
@@ -251,7 +331,20 @@ impl<'a> Formatter<'a> {
             align: rt::v1::Alignment::Unknown,
             width: None,
             precision: None,
-            buf,
+            buf: Buf { write: buf },
+        }
+    }
+    /// Creates a new formatter pointing to a `ConstBuf`.
+    ///
+    /// SAFETY: you may not let formatters exit the const eval realm!
+    const unsafe fn new_for_const(buf: &'a mut ConstBuf) -> Formatter<'a> {
+        Formatter {
+            flags: 0,
+            fill: ' ',
+            align: rt::v1::Alignment::Unknown,
+            width: None,
+            precision: None,
+            buf: Buf { const_buf: buf},
         }
     }
 }
@@ -336,8 +429,9 @@ macro_rules! arg_new {
 impl<'a> ArgumentV1<'a> {
     #[doc(hidden)]
     #[unstable(feature = "fmt_internals", reason = "internal to format_args!", issue = "none")]
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
     #[inline]
-    pub fn new<'b, T>(x: &'b T, f: fn(&T, &mut Formatter<'_>) -> Result) -> ArgumentV1<'b> {
+    pub const fn new<'b, T>(x: &'b T, f: fn(&T, &mut Formatter<'_>) -> Result) -> ArgumentV1<'b> {
         // SAFETY: `mem::transmute(x)` is safe because
         //     1. `&'b T` keeps the lifetime it originated with `'b`
         //              (so as to not have an unbounded lifetime)
@@ -556,7 +650,9 @@ impl Debug for Arguments<'_> {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Display for Arguments<'_> {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
-        write(fmt.buf, *self)
+        unsafe {
+            write(fmt.buf.write, *self)
+        }
     }
 }
 
@@ -783,6 +879,7 @@ pub use macros::Debug;
 #[doc(alias = "{}")]
 #[rustc_diagnostic_item = "Display"]
 #[stable(feature = "rust1", since = "1.0.0")]
+#[const_trait]
 pub trait Display {
     /// Formats the value using the given formatter.
     ///
@@ -1217,49 +1314,67 @@ pub trait UpperExp {
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn write(output: &mut dyn Write, args: Arguments<'_>) -> Result {
     let mut formatter = Formatter::new(output);
+    write_to_formatter(&mut formatter, args)
+}
+
+#[inline]
+const fn write_to_formatter(formatter: &mut Formatter<'_>, args: Arguments<'_>) -> Result {
     let mut idx = 0;
 
     match args.fmt {
         None => {
             // We can use default formatting parameters for all arguments.
-            for (i, arg) in args.args.iter().enumerate() {
+            let mut i = 0;
+            while i < args.args.len() {
+                let arg = &args.args[i];
                 // SAFETY: args.args and args.pieces come from the same Arguments,
                 // which guarantees the indexes are always within bounds.
                 let piece = unsafe { args.pieces.get_unchecked(i) };
                 if !piece.is_empty() {
-                    formatter.buf.write_str(*piece)?;
+                    tri!(formatter.write_str(*piece));
                 }
-                (arg.formatter)(arg.value, &mut formatter)?;
+                tri!((arg.formatter)(arg.value, &mut formatter));
                 idx += 1;
+                i += 1;
             }
         }
         Some(fmt) => {
             // Every spec has a corresponding argument that is preceded by
             // a string piece.
-            for (i, arg) in fmt.iter().enumerate() {
+            let mut i = 0;
+            while i < fmt.len() {
+                let arg = &fmt[i];
                 // SAFETY: fmt and args.pieces come from the same Arguments,
                 // which guarantees the indexes are always within bounds.
                 let piece = unsafe { args.pieces.get_unchecked(i) };
                 if !piece.is_empty() {
-                    formatter.buf.write_str(*piece)?;
+                    tri!(formatter.write_str(*piece));
                 }
                 // SAFETY: arg and args.args come from the same Arguments,
                 // which guarantees the indexes are always within bounds.
-                unsafe { run(&mut formatter, arg, args.args) }?;
+                tri!(unsafe { run(formatter, arg, args.args) });
                 idx += 1;
+                i += 1;
             }
         }
     }
 
     // There can be only one trailing string piece left.
     if let Some(piece) = args.pieces.get(idx) {
-        formatter.buf.write_str(*piece)?;
+        tri!(formatter.write_str(*piece));
     }
 
     Ok(())
 }
 
-unsafe fn run(fmt: &mut Formatter<'_>, arg: &rt::v1::Argument, args: &[ArgumentV1<'_>]) -> Result {
+#[unstable(feature = "const_panic_inner", issue = "none")]
+#[rustc_const_unstable(feature = "const_panic_formatting", issue = "none")]
+pub(crate) const fn write_to_leaked_str(args: Arguments<'_>) -> result::Result<&'static str, Error> {
+    // TODO
+    loop {}
+}
+
+const unsafe fn run(fmt: &mut Formatter<'_>, arg: &rt::v1::Argument, args: &[ArgumentV1<'_>]) -> Result {
     fmt.fill = arg.format.fill;
     fmt.align = arg.format.align;
     fmt.flags = arg.format.flags;
@@ -1280,7 +1395,7 @@ unsafe fn run(fmt: &mut Formatter<'_>, arg: &rt::v1::Argument, args: &[ArgumentV
     (value.formatter)(value.value, fmt)
 }
 
-unsafe fn getcount(args: &[ArgumentV1<'_>], cnt: &rt::v1::Count) -> Option<usize> {
+const unsafe fn getcount(args: &[ArgumentV1<'_>], cnt: &rt::v1::Count) -> Option<usize> {
     match *cnt {
         rt::v1::Count::Is(n) => Some(n),
         rt::v1::Count::Implied => None,
@@ -1301,14 +1416,16 @@ pub(crate) struct PostPadding {
 }
 
 impl PostPadding {
-    fn new(fill: char, padding: usize) -> PostPadding {
+    const fn new(fill: char, padding: usize) -> PostPadding {
         PostPadding { fill, padding }
     }
 
     /// Write this post padding.
-    pub(crate) fn write(self, f: &mut Formatter<'_>) -> Result {
-        for _ in 0..self.padding {
-            f.buf.write_char(self.fill)?;
+    pub(crate) const fn write(self, f: &mut Formatter<'_>) -> Result {
+        let mut i = 0;
+        while i < self.padding {
+            tri!(f.buf.write_char(self.fill));
+            i += 1;
         }
         Ok(())
     }
@@ -1322,7 +1439,8 @@ impl<'a> Formatter<'a> {
     {
         Formatter {
             // We want to change this
-            buf: wrap(self.buf),
+            // SAFETY: we are not in a const fn
+            buf: Buf { write: unsafe { wrap(self.buf.write) } },
 
             // And preserve these
             flags: self.flags,
@@ -1381,7 +1499,8 @@ impl<'a> Formatter<'a> {
     /// assert_eq!(format!("{:0>#8}", Foo::new(-1)), "00-Foo 1");
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
-    pub fn pad_integral(&mut self, is_nonnegative: bool, prefix: &str, buf: &str) -> Result {
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
+    pub const fn pad_integral(&mut self, is_nonnegative: bool, prefix: &str, buf: &str) -> Result {
         let mut width = buf.len();
 
         let mut sign = None;
@@ -1394,7 +1513,18 @@ impl<'a> Formatter<'a> {
         }
 
         let prefix = if self.alternate() {
-            width += prefix.chars().count();
+            // FIXME: adopt .chars().count() once that is const fn
+            const fn count_chars(s: &str) -> usize {
+                let mut i = 0;
+                let mut chars = 0;
+                let bytes = s.as_bytes();
+                while i < bytes.len() {
+                    chars += !crate::str::utf8_is_cont_byte(bytes[i]) as usize;
+                    i += 1;
+                }
+                chars
+            }
+            width += count_chars(prefix);
             Some(prefix)
         } else {
             None
@@ -1402,9 +1532,9 @@ impl<'a> Formatter<'a> {
 
         // Writes the sign if it exists, and then the prefix if it was requested
         #[inline(never)]
-        fn write_prefix(f: &mut Formatter<'_>, sign: Option<char>, prefix: Option<&str>) -> Result {
+        const fn write_prefix(f: &mut Formatter<'_>, sign: Option<char>, prefix: Option<&str>) -> Result {
             if let Some(c) = sign {
-                f.buf.write_char(c)?;
+                tri!(f.write_char(c));
             }
             if let Some(prefix) = prefix { f.buf.write_str(prefix) } else { Ok(()) }
         }
@@ -1414,14 +1544,14 @@ impl<'a> Formatter<'a> {
             // If there's no minimum length requirements then we can just
             // write the bytes.
             None => {
-                write_prefix(self, sign, prefix)?;
-                self.buf.write_str(buf)
+                tri!(write_prefix(self, sign, prefix));
+                self.write_str(buf)
             }
             // Check if we're over the minimum width, if so then we can also
             // just write the bytes.
             Some(min) if width >= min => {
-                write_prefix(self, sign, prefix)?;
-                self.buf.write_str(buf)
+                tri!(write_prefix(self, sign, prefix));
+                self.write_str(buf)
             }
             // The sign and prefix goes before the padding if the fill character
             // is zero
@@ -1430,8 +1560,8 @@ impl<'a> Formatter<'a> {
                 let old_align = crate::mem::replace(&mut self.align, rt::v1::Alignment::Right);
                 write_prefix(self, sign, prefix)?;
                 let post_padding = self.padding(min - width, rt::v1::Alignment::Right)?;
-                self.buf.write_str(buf)?;
-                post_padding.write(self)?;
+                tri!(self.write_str(buf));
+                tri!(post_padding.write(self));
                 self.fill = old_fill;
                 self.align = old_align;
                 Ok(())
@@ -1439,8 +1569,8 @@ impl<'a> Formatter<'a> {
             // Otherwise, the sign and prefix goes after the padding
             Some(min) => {
                 let post_padding = self.padding(min - width, rt::v1::Alignment::Right)?;
-                write_prefix(self, sign, prefix)?;
-                self.buf.write_str(buf)?;
+                tri!(write_prefix(self, sign, prefix));
+                tri!(self.write_str(buf));
                 post_padding.write(self)
             }
         }
@@ -1478,7 +1608,7 @@ impl<'a> Formatter<'a> {
     pub fn pad(&mut self, s: &str) -> Result {
         // Make sure there's a fast path up front
         if self.width.is_none() && self.precision.is_none() {
-            return self.buf.write_str(s);
+            return self.write_str(s);
         }
         // The `precision` field can be interpreted as a `max-width` for the
         // string being formatted.
@@ -1502,20 +1632,20 @@ impl<'a> Formatter<'a> {
         match self.width {
             // If we're under the maximum length, and there's no minimum length
             // requirements, then we can just emit the string
-            None => self.buf.write_str(s),
+            None => self.write_str(s),
             Some(width) => {
                 let chars_count = s.chars().count();
                 // If we're under the maximum width, check if we're over the minimum
                 // width, if so it's as easy as just emitting the string.
                 if chars_count >= width {
-                    self.buf.write_str(s)
+                    self.write_str(s)
                 }
                 // If we're under both the maximum and the minimum width, then fill
                 // up the minimum width with the specified string + some alignment.
                 else {
                     let align = rt::v1::Alignment::Left;
                     let post_padding = self.padding(width - chars_count, align)?;
-                    self.buf.write_str(s)?;
+                    self.write_str(s)?;
                     post_padding.write(self)
                 }
             }
@@ -1542,7 +1672,7 @@ impl<'a> Formatter<'a> {
         };
 
         for _ in 0..pre_pad {
-            self.buf.write_char(self.fill)?;
+            self.write_char(self.fill)?;
         }
 
         Ok(PostPadding::new(self.fill, post_pad))
@@ -1562,7 +1692,7 @@ impl<'a> Formatter<'a> {
             if self.sign_aware_zero_pad() {
                 // a sign always goes first
                 let sign = formatted.sign;
-                self.buf.write_str(sign)?;
+                self.write_str(sign)?;
 
                 // remove the sign from the formatted parts
                 formatted.sign = "";
@@ -1605,7 +1735,7 @@ impl<'a> Formatter<'a> {
         }
 
         if !formatted.sign.is_empty() {
-            self.buf.write_str(formatted.sign)?;
+            self.write_str(formatted.sign)?;
         }
         for part in formatted.parts {
             match *part {
@@ -1613,11 +1743,11 @@ impl<'a> Formatter<'a> {
                     const ZEROES: &str = // 64 zeroes
                         "0000000000000000000000000000000000000000000000000000000000000000";
                     while nzeroes > ZEROES.len() {
-                        self.buf.write_str(ZEROES)?;
+                        self.write_str(ZEROES)?;
                         nzeroes -= ZEROES.len();
                     }
                     if nzeroes > 0 {
-                        self.buf.write_str(&ZEROES[..nzeroes])?;
+                        self.write_str(&ZEROES[..nzeroes])?;
                     }
                 }
                 numfmt::Part::Num(mut v) => {
@@ -1627,10 +1757,12 @@ impl<'a> Formatter<'a> {
                         *c = b'0' + (v % 10) as u8;
                         v /= 10;
                     }
-                    write_bytes(self.buf, &s[..len])?;
+                    // SAFETY: we are not in a const fn
+                    write_bytes(unsafe { self.buf.write }, &s[..len])?;
                 }
                 numfmt::Part::Copy(buf) => {
-                    write_bytes(self.buf, buf)?;
+                    // SAFETY: we are not in a const fn
+                    write_bytes(unsafe { self.buf.write }, buf)?;
                 }
             }
         }
@@ -1658,11 +1790,16 @@ impl<'a> Formatter<'a> {
     /// assert_eq!(format!("{Foo}"), "Foo");
     /// assert_eq!(format!("{Foo:0>8}"), "Foo");
     /// ```
+    #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
-    pub fn write_str(&mut self, data: &str) -> Result {
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
+    pub const fn write_str(&mut self, data: &str) -> Result {
         self.buf.write_str(data)
     }
 
+    const fn write_char(&mut self, ch: char) -> Result {
+        self.buf.write_char(ch)
+    }
     /// Writes some formatted information into this instance.
     ///
     /// # Examples
@@ -1683,7 +1820,7 @@ impl<'a> Formatter<'a> {
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result {
-        write(self.buf, fmt)
+        self.buf.write_fmt(fmt)
     }
 
     /// Flags for formatting
@@ -1830,7 +1967,8 @@ impl<'a> Formatter<'a> {
     /// ```
     #[must_use]
     #[stable(feature = "fmt_flags", since = "1.5.0")]
-    pub fn precision(&self) -> Option<usize> {
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
+    pub const fn precision(&self) -> Option<usize> {
         self.precision
     }
 
@@ -1862,7 +2000,8 @@ impl<'a> Formatter<'a> {
     /// ```
     #[must_use]
     #[stable(feature = "fmt_flags", since = "1.5.0")]
-    pub fn sign_plus(&self) -> bool {
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
+    pub const fn sign_plus(&self) -> bool {
         self.flags & (1 << FlagV1::SignPlus as u32) != 0
     }
 
@@ -1919,7 +2058,8 @@ impl<'a> Formatter<'a> {
     /// ```
     #[must_use]
     #[stable(feature = "fmt_flags", since = "1.5.0")]
-    pub fn alternate(&self) -> bool {
+    #[rustc_const_unstable(feature = "const_core_format", issue = "none")]
+    pub const fn alternate(&self) -> bool {
         self.flags & (1 << FlagV1::Alternate as u32) != 0
     }
 
@@ -2367,15 +2507,15 @@ impl<'a> Formatter<'a> {
 #[stable(since = "1.2.0", feature = "formatter_write")]
 impl Write for Formatter<'_> {
     fn write_str(&mut self, s: &str) -> Result {
-        self.buf.write_str(s)
+        self.write_str(s)
     }
 
     fn write_char(&mut self, c: char) -> Result {
-        self.buf.write_char(c)
+        self.write_char(c)
     }
 
     fn write_fmt(&mut self, args: Arguments<'_>) -> Result {
-        write(self.buf, args)
+        self.write_fmt(args)
     }
 }
 

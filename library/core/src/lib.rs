@@ -107,6 +107,7 @@
 #![feature(const_black_box)]
 #![feature(const_caller_location)]
 #![feature(const_cell_into_inner)]
+#![feature(const_core_format)]
 #![feature(const_char_from_u32_unchecked)]
 #![feature(const_clone)]
 #![feature(const_cmp)]
@@ -137,6 +138,7 @@
 #![feature(const_ptr_sub_ptr)]
 #![feature(const_replace)]
 #![feature(const_result_drop)]
+#![feature(const_panic_formatting)]
 #![feature(const_ptr_as_ref)]
 #![feature(const_ptr_is_null)]
 #![feature(const_ptr_read)]
@@ -179,6 +181,7 @@
 #![feature(const_is_char_boundary)]
 #![feature(const_cstr_methods)]
 #![feature(is_ascii_octdigit)]
+#![feature(maybe_uninit_slice)]
 //
 // Language features:
 #![feature(abi_unadjusted)]

@@ -9,6 +9,7 @@ use crate::slice;
 use crate::str;
 
 #[doc(hidden)]
+#[const_trait]
 trait DisplayInt:
     PartialEq + PartialOrd + Div<Output = Self> + Rem<Output = Self> + Sub<Output = Self> + Copy
 {
@@ -23,7 +24,7 @@ trait DisplayInt:
 
 macro_rules! impl_int {
     ($($t:ident)*) => (
-      $(impl DisplayInt for $t {
+      $(impl const DisplayInt for $t {
           fn zero() -> Self { 0 }
           fn from_u8(u: u8) -> Self { u as Self }
           fn to_u8(&self) -> u8 { *self as u8 }
@@ -36,7 +37,7 @@ macro_rules! impl_int {
 }
 macro_rules! impl_uint {
     ($($t:ident)*) => (
-      $(impl DisplayInt for $t {
+      $(impl const DisplayInt for $t {
           fn zero() -> Self { 0 }
           fn from_u8(u: u8) -> Self { u as Self }
           fn to_u8(&self) -> u8 { *self as u8 }
@@ -200,20 +201,26 @@ debug! {
 }
 
 // 2 digit decimal look up table
-static DEC_DIGITS_LUT: &[u8; 200] = b"0001020304050607080910111213141516171819\
+const DEC_DIGITS_LUT: &[u8; 200] = b"0001020304050607080910111213141516171819\
       2021222324252627282930313233343536373839\
       4041424344454647484950515253545556575859\
       6061626364656667686970717273747576777879\
       8081828384858687888990919293949596979899";
 
+// Needed because const fn cannot refer to statics.
+// https://github.com/rust-lang/const-eval/issues/11
+const fn dec_digits_lut() -> &'static [u8; 200] {
+    DEC_DIGITS_LUT
+}
+
 macro_rules! impl_Display {
     ($($t:ident),* as $u:ident via $conv_fn:ident named $name:ident) => {
-        fn $name(mut n: $u, is_nonnegative: bool, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const fn $name(mut n: $u, is_nonnegative: bool, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             // 2^128 is about 3*10^38, so 39 gives an extra byte of space
             let mut buf = [MaybeUninit::<u8>::uninit(); 39];
             let mut curr = buf.len();
             let buf_ptr = MaybeUninit::slice_as_mut_ptr(&mut buf);
-            let lut_ptr = DEC_DIGITS_LUT.as_ptr();
+            let lut_ptr = dec_digits_lut().as_ptr();
 
             // SAFETY: Since `d1` and `d2` are always less than or equal to `198`, we
             // can copy from `lut_ptr[d1..d1 + 1]` and `lut_ptr[d2..d2 + 1]`. To show
@@ -274,7 +281,8 @@ macro_rules! impl_Display {
         }
 
         $(#[stable(feature = "rust1", since = "1.0.0")]
-        impl fmt::Display for $t {
+        #[rustc_const_unstable(feature = "const_int_display", issue = "none")]
+        impl const fmt::Display for $t {
             #[allow(unused_comparisons)]
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let is_nonnegative = *self >= 0;
