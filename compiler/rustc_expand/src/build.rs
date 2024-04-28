@@ -96,6 +96,7 @@ impl<'a> ExtCtxt<'a> {
                 span,
                 attrs: AttrVec::new(),
                 tokens: None,
+                metavar_source_span: None,
             }),
         }
     }
@@ -264,7 +265,7 @@ impl<'a> ExtCtxt<'a> {
     }
 
     pub fn expr(&self, span: Span, kind: ast::ExprKind) -> P<ast::Expr> {
-        P(ast::Expr { id: ast::DUMMY_NODE_ID, kind, span, attrs: AttrVec::new(), tokens: None })
+        P(ast::Expr { id: ast::DUMMY_NODE_ID, kind, span, attrs: AttrVec::new(), tokens: None, metavar_source_span: None })
     }
 
     pub fn expr_path(&self, path: ast::Path) -> P<ast::Expr> {

@@ -2203,6 +2203,9 @@ impl MacroRulesNormalizedIdent {
     pub fn new(ident: Ident) -> Self {
         Self(ident.normalize_to_macro_rules())
     }
+    pub fn ident(&self) -> Ident {
+        self.0
+    }
 }
 
 impl fmt::Debug for MacroRulesNormalizedIdent {

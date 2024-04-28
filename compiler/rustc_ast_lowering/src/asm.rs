@@ -219,6 +219,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                                 span: *op_sp,
                                 attrs: AttrVec::new(),
                                 tokens: None,
+                                metavar_source_span: None,
                             };
 
                             // Wrap the expression in an AnonConst.

@@ -10,7 +10,11 @@ error: arbitrary expressions aren't allowed in patterns
 LL |     funny!(a, a);
    |            ^
    |
-   = note: maybe the pattern comes from a macro meta variable?
+note: the expression looks like a pattern but it comes from an `:expr` meta variable
+  --> $DIR/expr_before_ident_pat.rs:2:7
+   |
+LL |     ($a:expr, $b:ident) => {
+   |       ^
 
 error: aborting due to 2 previous errors
 

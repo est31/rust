@@ -1167,6 +1167,7 @@ pub struct Expr {
     pub span: Span,
     pub attrs: AttrVec,
     pub tokens: Option<LazyAttrTokenStream>,
+    pub metavar_source_span: Option<Span>,
 }
 
 impl Expr {
@@ -3379,7 +3380,7 @@ mod size_asserts {
     static_assert_size!(AssocItemKind, 16);
     static_assert_size!(Attribute, 32);
     static_assert_size!(Block, 32);
-    static_assert_size!(Expr, 72);
+    static_assert_size!(Expr, 80);
     static_assert_size!(ExprKind, 40);
     static_assert_size!(Fn, 160);
     static_assert_size!(ForeignItem, 96);

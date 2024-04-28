@@ -572,6 +572,7 @@ impl DummyResult {
             span: sp,
             attrs: ast::AttrVec::new(),
             tokens: None,
+            metavar_source_span: None,
         })
     }
 

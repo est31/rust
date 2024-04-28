@@ -8,7 +8,7 @@ use crate::mbe::{self, KleeneOp, MetaVarExpr};
 use rustc_ast::mut_visit::{self, MutVisitor};
 use rustc_ast::token::{self, Delimiter, Token, TokenKind};
 use rustc_ast::tokenstream::{DelimSpacing, DelimSpan, Spacing, TokenStream, TokenTree};
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::{fx::FxHashMap, sync::Lrc};
 use rustc_errors::{pluralize, Diag, PResult};
 use rustc_parse::parser::ParseNtResult;
 use rustc_span::hygiene::{LocalExpnId, Transparency};
@@ -249,7 +249,7 @@ pub(super) fn transcribe<'a>(
                 // Find the matched nonterminal from the macro invocation, and use it to replace
                 // the meta-var.
                 let ident = MacroRulesNormalizedIdent::new(original_ident);
-                if let Some(cur_matched) = lookup_cur_matched(ident, interp, &repeats) {
+                if let Some((cur_matched, cur_matched_ident)) = lookup_cur_matched(ident, interp, &repeats) {
                     let tt = match cur_matched {
                         MatchedSingle(ParseNtResult::Tt(tt)) => {
                             // `tt`s are emitted into the output stream directly as "raw tokens",
@@ -261,7 +261,9 @@ pub(super) fn transcribe<'a>(
                             // `Delimiter::Invisible` to maintain parsing priorities.
                             // `Interpolated` is currently used for such groups in rustc parser.
                             marker.visit_span(&mut sp);
-                            TokenTree::token_alone(token::Interpolated(nt.clone()), sp)
+                            //tracing::error!("transcribe: {:}: {:?}", original_ident, nt.0);
+                            let nonterminal = Lrc::new((nt.0.clone(), nt.1, Some(cur_matched_ident.ident().span)));
+                            TokenTree::token_alone(token::Interpolated(nonterminal), sp)
                         }
                         MatchedSeq(..) => {
                             // We were unable to descend far enough. This is an error.
@@ -419,8 +421,8 @@ fn lookup_cur_matched<'a>(
     ident: MacroRulesNormalizedIdent,
     interpolations: &'a FxHashMap<MacroRulesNormalizedIdent, NamedMatch>,
     repeats: &[(usize, usize)],
-) -> Option<&'a NamedMatch> {
-    interpolations.get(&ident).map(|mut matched| {
+) -> Option<(&'a NamedMatch, &'a MacroRulesNormalizedIdent)> {
+    interpolations.get_key_value(&ident).map(|(ident, mut matched)| {
         for &(idx, _) in repeats {
             match matched {
                 MatchedSingle(_) => break,
@@ -428,7 +430,7 @@ fn lookup_cur_matched<'a>(
             }
         }
 
-        matched
+        (matched, ident)
     })
 }
 
@@ -512,7 +514,7 @@ fn lockstep_iter_size(
         TokenTree::MetaVar(_, name) | TokenTree::MetaVarDecl(_, name, _) => {
             let name = MacroRulesNormalizedIdent::new(*name);
             match lookup_cur_matched(name, interpolations, repeats) {
-                Some(matched) => match matched {
+                Some((matched, _)) => match matched {
                     MatchedSingle(_) => LockstepIterSize::Unconstrained,
                     MatchedSeq(ads) => LockstepIterSize::Constraint(ads.len(), name),
                 },
@@ -526,7 +528,7 @@ fn lockstep_iter_size(
             };
             let name = MacroRulesNormalizedIdent::new(ident);
             match lookup_cur_matched(name, interpolations, repeats) {
-                Some(MatchedSeq(ads)) => {
+                Some((MatchedSeq(ads), _)) => {
                     default_rslt.with(LockstepIterSize::Constraint(ads.len(), name))
                 }
                 _ => default_rslt,

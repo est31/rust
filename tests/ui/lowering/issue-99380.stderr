@@ -3,6 +3,12 @@ error: arbitrary expressions aren't allowed in patterns
    |
 LL |     foo!(Some(3));
    |          ^^^^^^^
+   |
+note: the expression looks like a pattern but it comes from an `:expr` meta variable
+  --> $DIR/issue-99380.rs:2:7
+   |
+LL |     ($p:expr) => {
+   |       ^
 
 error: aborting due to 1 previous error
 

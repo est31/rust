@@ -369,7 +369,7 @@ pub struct ArbitraryExpressionInPattern {
     #[primary_span]
     pub span: Span,
     #[note(ast_lowering_pattern_from_macro_note)]
-    pub pattern_from_macro_note: bool,
+    pub pattern_from_macro_note: Option<Span>,
 }
 
 #[derive(Diagnostic)]

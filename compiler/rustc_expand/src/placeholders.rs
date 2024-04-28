@@ -40,6 +40,7 @@ pub fn placeholder(
             attrs: ast::AttrVec::new(),
             kind: ast::ExprKind::MacCall(mac_placeholder()),
             tokens: None,
+          metavar_source_span: None,
         })
     };
     let ty =

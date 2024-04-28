@@ -7,7 +7,11 @@ LL |     () => { force_expr!(Vec::new()) }
 LL |     assert!(matches!(x, En::A(make_vec!())));
    |                               ----------- in this macro invocation
    |
-   = note: maybe the pattern comes from a macro meta variable?
+note: the expression looks like a pattern but it comes from an `:expr` meta variable
+  --> $DIR/issue-92074-macro-ice.rs:10:7
+   |
+LL |     ($e:expr) => { $e }
+   |       ^
    = note: this error originates in the macro `make_vec` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: arbitrary expressions aren't allowed in patterns
@@ -19,7 +23,11 @@ LL |     () => { force_pat!(get_usize(), get_usize()) }
 LL |     assert!(matches!(5, make_pat!()));
    |                         ----------- in this macro invocation
    |
-   = note: maybe the pattern comes from a macro meta variable?
+note: the expression looks like a pattern but it comes from an `:expr` meta variable
+  --> $DIR/issue-92074-macro-ice.rs:14:7
+   |
+LL |     ($a:expr, $b:expr) => { $a..=$b }
+   |       ^
    = note: this error originates in the macro `make_pat` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: arbitrary expressions aren't allowed in patterns
@@ -31,7 +39,11 @@ LL |     () => { force_pat!(get_usize(), get_usize()) }
 LL |     assert!(matches!(5, make_pat!()));
    |                         ----------- in this macro invocation
    |
-   = note: maybe the pattern comes from a macro meta variable?
+note: the expression looks like a pattern but it comes from an `:expr` meta variable
+  --> $DIR/issue-92074-macro-ice.rs:14:16
+   |
+LL |     ($a:expr, $b:expr) => { $a..=$b }
+   |                ^
    = note: this error originates in the macro `make_pat` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: aborting due to 3 previous errors

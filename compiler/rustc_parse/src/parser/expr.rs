@@ -47,8 +47,10 @@ macro_rules! maybe_whole_expr {
         if let token::Interpolated(nt) = &$p.token.kind {
             match &nt.0 {
                 token::NtExpr(e) | token::NtLiteral(e) => {
-                    let e = e.clone();
+                    let mut e = e.clone();
+                    let metavar_source_span = nt.2;
                     $p.bump();
+                    e.metavar_source_span = metavar_source_span;
                     return Ok(e);
                 }
                 token::NtPath(path) => {
@@ -3818,7 +3820,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn mk_expr_with_attrs(&self, span: Span, kind: ExprKind, attrs: AttrVec) -> P<Expr> {
-        P(Expr { kind, span, attrs, id: DUMMY_NODE_ID, tokens: None })
+        P(Expr { kind, span, attrs, id: DUMMY_NODE_ID, tokens: None, metavar_source_span: None })
     }
 
     pub(crate) fn mk_expr(&self, span: Span, kind: ExprKind) -> P<Expr> {

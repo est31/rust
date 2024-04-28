@@ -1385,7 +1385,7 @@ fn noop_visit_format_args<T: MutVisitor>(fmt: &mut FormatArgs, vis: &mut T) {
 }
 
 pub fn noop_visit_expr<T: MutVisitor>(
-    Expr { kind, id, span, attrs, tokens }: &mut Expr,
+    Expr { kind, id, span, attrs, tokens, metavar_source_span }: &mut Expr,
     vis: &mut T,
 ) {
     match kind {
@@ -1562,6 +1562,9 @@ pub fn noop_visit_expr<T: MutVisitor>(
     }
     vis.visit_id(id);
     vis.visit_span(span);
+    if let Some(metavar_source_span) = metavar_source_span {
+        vis.visit_span(metavar_source_span);
+    }
     visit_attrs(attrs, vis);
     visit_lazy_tts(tokens, vis);
 }
@@ -1678,6 +1681,7 @@ impl DummyAstNode for Expr {
             span: Default::default(),
             attrs: Default::default(),
             tokens: Default::default(),
+            metavar_source_span: None,
         }
     }
 }

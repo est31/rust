@@ -333,7 +333,7 @@ pub enum TokenKind {
     /// - It prevents `Token` from implementing `Copy`.
     /// It adds complexity and likely slows things down. Please don't add new
     /// occurrences of this token kind!
-    Interpolated(Lrc<(Nonterminal, Span)>),
+    Interpolated(Lrc<(Nonterminal, Span, Option<Span>)>),
 
     /// A doc comment token.
     /// `Symbol` is the doc comment's data excluding its "quotes" (`///`, `/**`, etc)

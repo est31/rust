@@ -339,9 +339,10 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             ExprKind::Path(..) if allow_paths => {}
             ExprKind::Unary(UnOp::Neg, inner) if matches!(inner.kind, ExprKind::Lit(_)) => {}
             _ => {
-                let marks = expr.span.ctxt().marks().len() > 0;
+                //tracing::error!("tokens: {:?}", expr.tokens);
+                let marks = expr.metavar_source_span;
                 let pattern_from_macro =
-                    expr.is_approximately_pattern() && marks;
+                    expr.is_approximately_pattern().then_some(marks).flatten();
                 let guar = self.dcx().emit_err(ArbitraryExpressionInPattern {
                     span: expr.span,
                     pattern_from_macro_note: pattern_from_macro,

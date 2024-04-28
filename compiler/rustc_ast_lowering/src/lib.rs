@@ -1179,6 +1179,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                                     span,
                                     attrs: AttrVec::new(),
                                     tokens: None,
+                                    metavar_source_span: None,
                                 };
 
                                 let ct = self.with_new_scopes(span, |this| hir::AnonConst {

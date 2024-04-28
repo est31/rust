@@ -607,6 +607,7 @@ pub fn mk_attr_name_value_str(
         span,
         attrs: AttrVec::new(),
         tokens: None,
+        metavar_source_span: None,
     });
     let path = Path::from_ident(Ident::new(name, span));
     let args = AttrArgs::Eq(span, AttrArgsEq::Ast(expr));

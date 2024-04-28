@@ -760,6 +760,7 @@ pub(super) fn expand_asm<'cx>(
                     span: sp,
                     attrs: ast::AttrVec::new(),
                     tokens: None,
+                    metavar_source_span: None,
                 }),
                 Err(guar) => DummyResult::raw_expr(sp, Some(guar)),
             };
