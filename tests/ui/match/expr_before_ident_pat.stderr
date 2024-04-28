@@ -9,6 +9,8 @@ error: arbitrary expressions aren't allowed in patterns
    |
 LL |     funny!(a, a);
    |            ^
+   |
+   = note: maybe the pattern comes from a macro meta variable?
 
 error: aborting due to 2 previous errors
 

@@ -5,6 +5,7 @@ ast_lowering_abi_specified_multiple_times =
 
 ast_lowering_arbitrary_expression_in_pattern =
     arbitrary expressions aren't allowed in patterns
+    .pattern_from_macro_note = maybe the pattern comes from a macro meta variable?
 
 ast_lowering_argument = argument
 

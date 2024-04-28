@@ -3,12 +3,16 @@ error: arbitrary expressions aren't allowed in patterns
    |
 LL |     m!(y);
    |        ^
+   |
+   = note: maybe the pattern comes from a macro meta variable?
 
 error: arbitrary expressions aren't allowed in patterns
   --> $DIR/issue-43250.rs:11:8
    |
 LL |     m!(C);
    |        ^
+   |
+   = note: maybe the pattern comes from a macro meta variable?
 
 error: aborting due to 2 previous errors
 
