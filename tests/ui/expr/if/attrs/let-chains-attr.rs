@@ -1,6 +1,6 @@
 //@ check-pass
-
-#![feature(let_chains)]
+//@ edition:2024
+//@ compile-flags: -Zunstable-options
 
 #[cfg(FALSE)]
 fn foo() {
